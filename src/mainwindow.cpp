@@ -1,11 +1,11 @@
 #include "mainwindow.h"
-#include "./ui_mainwindow.h"
+#include "ui_mainwindow.h"
 
 #include <QFile>
 #include <QDebug>
 #include <QFileDialog>
 #include <QFuture>
-#include <QtConcurrent/QtConcurrent>
+#include <QtConcurrent/QtConcurrentRun>
 
 #ifndef PAGE_S
 #define PAGE_S
@@ -171,25 +171,26 @@ void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count){
     QFile image_file(destination + url.toString().split("/").last());
     if(image_file.exists()) return;
 
-    QFuture future = QtConcurrent::run([=](){
-        QNetworkAccessManager manager;
-        QNetworkReply* reply = manager.get(QNetworkRequest(url));
 
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
+    m_threadpool.start([=](){
+            QNetworkAccessManager manager;
+            QNetworkReply* reply = manager.get(QNetworkRequest(url));
 
-        if(reply->error() && retry_count < 5){
-            QThread::sleep(5);
-            qDebug() << "Error" << retry_count << reply->error();
-            int r = retry_count + 1;
-            DownloadImage(url, destination, r);
-        }
+            QEventLoop loop;
+            QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+            loop.exec();
 
-        auto data = reply->readAll();
-        QPixmap image;
-        image.loadFromData(data);
-        QString output = destination + url.toString().split("/").last();
-        if(image.save(output, nullptr, 100)) qDebug() << "File successfully saved at:" << output;
+            if(reply->error() && retry_count < 5){
+                QThread::sleep(5);
+                qDebug() << "Error" << retry_count << reply->error();
+                int r = retry_count + 1;
+                DownloadImage(url, destination, r);
+            }
+
+            auto data = reply->readAll();
+            QPixmap image;
+            image.loadFromData(data);
+            QString output = destination + url.toString().split("/").last();
+            if(image.save(output, nullptr, 100)) qDebug() << "File successfully saved at:" << output;
     });
 }

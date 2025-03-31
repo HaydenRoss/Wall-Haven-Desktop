@@ -6,6 +6,7 @@
 #include <QtNetwork/QNetworkAccessManager>
 #include <QCheckBox>
 #include <QJsonDocument>
+#include <QThreadPool>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -38,7 +39,7 @@ private:
     Ui::MainWindow *ui;
     QNetworkAccessManager* manager;
     QNetworkAccessManager* p_thumbnail_manager;
-
+    QThreadPool m_threadpool;
 
     void LoadConfig();
     void SendHTTPRequest();
