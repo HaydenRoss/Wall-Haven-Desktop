@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QThreadPool>
 
+//QNetworkAccessManager *nMgr();
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;

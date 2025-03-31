@@ -4,8 +4,6 @@
 #include <QFile>
 #include <QDebug>
 #include <QFileDialog>
-#include <QFuture>
-#include <QtConcurrent/QtConcurrentRun>
 
 #ifndef PAGE_S
 #define PAGE_S
@@ -55,6 +53,8 @@ MainWindow::MainWindow(QWidget *parent)
 }
 MainWindow::~MainWindow(){
     delete ui;
+    delete manager;
+    delete p_thumbnail_manager;
 }
 void MainWindow::LoadConfig(){
     //Attempt to load config otherwise use defaults
@@ -168,9 +168,9 @@ void MainWindow::SaveButtonClicked()
     ui->Tabs->setCurrentIndex(0);
 }
 void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count){
-    QFile image_file(destination + url.toString().split("/").last());
+    QString output_file = destination + url.toString().split("/").last();
+    QFile image_file(output_file);
     if(image_file.exists()) return;
-
 
     m_threadpool.start([=](){
             QNetworkAccessManager manager;
@@ -190,7 +190,6 @@ void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count){
             auto data = reply->readAll();
             QPixmap image;
             image.loadFromData(data);
-            QString output = destination + url.toString().split("/").last();
-            if(image.save(output, nullptr, 100)) qDebug() << "File successfully saved at:" << output;
+            if(image.save(output_file, nullptr, 100)) qDebug() << "File successfully saved at:" << output_file;
     });
 }
