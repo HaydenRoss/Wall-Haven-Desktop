@@ -7,8 +7,6 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QJsonDocument>
-#include <QDebug>
-#include <QFileDialog>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -38,27 +36,19 @@ private slots:
     void thumbnailManagerFinished(QNetworkReply *reply);
     void imageManagerFinished(QNetworkReply *reply);
 
-    void SearchButtonClicked();
     void DownloadButtonClicked(QAbstractButton*);
-    void SettingsButtonClicked();
     void SaveButtonClicked();
-    void BackButtonClicked();
-    void DownloadFolderButtonClicked();
-    void PageBackButtonClicked();
-    void PageForwardButtonClicked();
-    void DownloadAllButtonClicked();
-
 private:
     Ui::MainWindow *ui;
     QNetworkAccessManager* manager;
     QNetworkAccessManager* p_thumbnail_manager;
     QNetworkAccessManager* p_image_manager;
 
+    void SendHTTPRequest();
+    inline QString isChecked(QCheckBox* cb){if(cb->isChecked()) return "1"; return "0";}
+
     int m_page_number = 1;
     QMap<int, PAGE> PAGES;
-
-    QString isChecked(QCheckBox* cb);
-    QString parseUIInput();
-    void SendHTTPRequest();
+    QHash<QNetworkReply*, int> m_data_storage;
 };
 #endif // MAINWINDOW_H
