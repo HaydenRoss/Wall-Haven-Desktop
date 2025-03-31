@@ -4,7 +4,6 @@
 
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkAccessManager>
-#include <QPushButton>
 #include <QCheckBox>
 #include <QJsonDocument>
 
@@ -34,18 +33,17 @@ public:
 private slots:
     void managerFinished(QNetworkReply *reply);
     void thumbnailManagerFinished(QNetworkReply *reply);
-    void imageManagerFinished(QNetworkReply *reply);
-
-    void DownloadButtonClicked(QAbstractButton*);
     void SaveButtonClicked();
 private:
     Ui::MainWindow *ui;
     QNetworkAccessManager* manager;
     QNetworkAccessManager* p_thumbnail_manager;
-    QNetworkAccessManager* p_image_manager;
 
+
+    void LoadConfig();
     void SendHTTPRequest();
     inline QString isChecked(QCheckBox* cb){if(cb->isChecked()) return "1"; return "0";}
+    void DownloadImage(QUrl url, QString destination, int retry_count = 0);
 
     int m_page_number = 1;
     QMap<int, PAGE> PAGES;

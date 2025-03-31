@@ -4,6 +4,8 @@
 #include <QFile>
 #include <QDebug>
 #include <QFileDialog>
+#include <QFuture>
+#include <QtConcurrent/QtConcurrent>
 
 #ifndef PAGE_S
 #define PAGE_S
@@ -20,6 +22,41 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    LoadConfig();
+
+    //Create NetworkManagers that catch the responses from various get requests
+    manager = new QNetworkAccessManager();
+    QObject::connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(managerFinished(QNetworkReply*)));
+    p_thumbnail_manager = new QNetworkAccessManager();
+    QObject::connect(p_thumbnail_manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(thumbnailManagerFinished(QNetworkReply*)));
+
+    //Button Mappings (simple = lambda function)
+    QObject::connect(ui->SaveButton, &QPushButton::clicked, this, &MainWindow::SaveButtonClicked);
+
+    // Search with configuration
+    QObject::connect(ui->SearchButton, &QPushButton::clicked, this, [=](){SendHTTPRequest();});
+    // Go back to main screen
+    QObject::connect(ui->BackButton, &QPushButton::clicked, this, [=](){ui->Tabs->setCurrentIndex(0);});
+    // Go to settings screen
+    QObject::connect(ui->SettingsButton, &QPushButton::clicked, this, [=](){ui->Tabs->setCurrentIndex(1);});
+    // Move forward back page
+    QObject::connect(ui->PageBackButton, &QPushButton::clicked, this, [=](){ if(m_page_number > 1) { m_page_number--; ui->PageNumberLabel->setText(QString::number(m_page_number)); SendHTTPRequest();}});
+    // Move forward one page
+    QObject::connect(ui->PageForwardButton, &QPushButton::clicked, this, [=](){ m_page_number++; ui->PageNumberLabel->setText(QString::number(m_page_number)); SendHTTPRequest(); });
+    // Set download folder
+    QObject::connect(ui->DownloadFolderButton, &QPushButton::clicked, this, [=](){ui->DownloadFolderInput->setText(QUrl(QFileDialog::getExistingDirectory(this, tr(""), QDir::homePath())).toString() + "/");});
+    // Download image from corrisponding button
+    QObject::connect(ui->DownloadButtons, &QButtonGroup::buttonClicked, this, [=](QAbstractButton*button){ DownloadImage(QUrl::fromUserInput(button->toolTip()), ui->DownloadFolderInput->text()); });
+    // Download all images on current page
+    QObject::connect(ui->DownloadAllButton, &QPushButton::clicked, this, [=](){ for(int i = 0; i < 24; i++) DownloadImage(QUrl::fromUserInput(PAGES[m_page_number].json["data"][i]["path"].toString()), ui->DownloadFolderInput->text()); });
+
+    //Do initial request for the first page
+    SendHTTPRequest();
+}
+MainWindow::~MainWindow(){
+    delete ui;
+}
+void MainWindow::LoadConfig(){
     //Attempt to load config otherwise use defaults
     QFile config(QDir::homePath()+"/.config/wallhaven/config.json");
     if(config.open(QIODevice::ReadOnly)){
@@ -39,47 +76,6 @@ MainWindow::MainWindow(QWidget *parent)
         ui->DownloadFolderInput->setText(config_json["download_folder"].toString());
         config.close();
     }
-
-    //Create NetworkManagers that catch the responses from various get requests
-    manager = new QNetworkAccessManager();
-    QObject::connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(managerFinished(QNetworkReply*)));
-    p_thumbnail_manager = new QNetworkAccessManager();
-    QObject::connect(p_thumbnail_manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(thumbnailManagerFinished(QNetworkReply*)));
-    p_image_manager = new QNetworkAccessManager();
-    QObject::connect(p_image_manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(imageManagerFinished(QNetworkReply*)));
-
-    //Button Mappings (simple = lambda function)
-
-    QObject::connect(ui->DownloadButtons, SIGNAL(buttonClicked(QAbstractButton*)), this, SLOT(DownloadButtonClicked(QAbstractButton*)));
-    QObject::connect(ui->SaveButton, &QPushButton::clicked, this, &MainWindow::SaveButtonClicked);
-
-    // Search with configuration
-    QObject::connect(ui->SearchButton, &QPushButton::clicked, this, [=](){SendHTTPRequest();});
-    // Go back to main screen
-    QObject::connect(ui->BackButton, &QPushButton::clicked, this, [=](){ui->Tabs->setCurrentIndex(0);});
-    // Go to settings screen
-    QObject::connect(ui->SettingsButton, &QPushButton::clicked, this, [=](){ui->Tabs->setCurrentIndex(1);});
-    // Move forward back page
-    QObject::connect(ui->PageBackButton, &QPushButton::clicked, this, [=](){ if(m_page_number > 1) { m_page_number--; ui->PageNumberLabel->setText(QString::number(m_page_number)); SendHTTPRequest();}});
-    // Move forward one page
-    QObject::connect(ui->PageForwardButton, &QPushButton::clicked, this, [=](){ m_page_number++; ui->PageNumberLabel->setText(QString::number(m_page_number)); SendHTTPRequest(); });
-    // Set download folder
-    QObject::connect(ui->DownloadFolderButton, &QPushButton::clicked, this, [=](){ui->DownloadFolderInput->setText(QUrl(QFileDialog::getExistingDirectory(this, tr(""), QDir::homePath())).toString() + "/");});
-    // Download all images on current page
-    QObject::connect(ui->DownloadAllButton, &QPushButton::clicked, this, [=]()
-    {
-        for(int i = 0; i < 24; i++){
-            QFile image(ui->DownloadFolderInput->text() + PAGES[m_page_number].json["data"][i]["path"].toString().split("/").last());
-            if(!image.exists()) p_image_manager->get(QNetworkRequest(QUrl::fromUserInput(PAGES[m_page_number].json["data"][i]["path"].toString())));
-            else qDebug() << "File Already Exists";
-        }
-    });
-
-    //Do initial request for the first page
-    SendHTTPRequest();
-}
-MainWindow::~MainWindow(){
-    delete ui;
 }
 void MainWindow::SendHTTPRequest(){
     QString request = "https://wallhaven.cc/api/v1/search?";
@@ -140,29 +136,6 @@ void MainWindow::thumbnailManagerFinished(QNetworkReply *reply){
         }
     }
 }
-void MainWindow::DownloadButtonClicked(QAbstractButton* button){
-    QString request = button->toolTip();
-
-    QFile image(ui->DownloadFolderInput->text() + request.split("/").last());
-    if(image.exists()){
-        qDebug() << "File Already Exists";
-        return;
-    }
-
-    p_image_manager->get(QNetworkRequest(QUrl::fromUserInput(request)));
-}
-void MainWindow::imageManagerFinished(QNetworkReply *reply){
-    if(reply->error()){
-        qDebug() << reply->errorString();
-        return;
-    }
-
-    auto data = reply->readAll();
-    QPixmap image;
-    image.loadFromData(data);
-    QString output = ui->DownloadFolderInput->text() + reply->url().toString().split("/").last();
-    qDebug() << image.save(output, nullptr, 100);
-}
 void MainWindow::SaveButtonClicked()
 {
     QDir config_dir;
@@ -193,4 +166,30 @@ void MainWindow::SaveButtonClicked()
     }
 
     ui->Tabs->setCurrentIndex(0);
+}
+void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count){
+    QFile image_file(destination + url.toString().split("/").last());
+    if(image_file.exists()) return;
+
+    QFuture future = QtConcurrent::run([=](){
+        QNetworkAccessManager manager;
+        QNetworkReply* reply = manager.get(QNetworkRequest(url));
+
+        QEventLoop loop;
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        loop.exec();
+
+        if(reply->error() && retry_count < 5){
+            QThread::sleep(5);
+            qDebug() << "Error" << retry_count << reply->error();
+            int r = retry_count + 1;
+            DownloadImage(url, destination, r);
+        }
+
+        auto data = reply->readAll();
+        QPixmap image;
+        image.loadFromData(data);
+        QString output = destination + url.toString().split("/").last();
+        if(image.save(output, nullptr, 100)) qDebug() << "File successfully saved at:" << output;
+    });
 }
