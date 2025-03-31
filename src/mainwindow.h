@@ -1,14 +1,11 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 #include <QMainWindow>
-
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QCheckBox>
 #include <QJsonDocument>
 #include <QThreadPool>
-
-//QNetworkAccessManager *nMgr();
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -37,6 +34,7 @@ private slots:
     void managerFinished(QNetworkReply *reply);
     void thumbnailManagerFinished(QNetworkReply *reply);
     void SaveButtonClicked();
+
 private:
     Ui::MainWindow *ui;
     QNetworkAccessManager* manager;
@@ -45,8 +43,8 @@ private:
 
     void LoadConfig();
     void SendHTTPRequest();
-    inline QString isChecked(QCheckBox* cb){if(cb->isChecked()) return "1"; return "0";}
     void DownloadImage(QUrl url, QString destination, int retry_count = 0);
+    inline QString isChecked(QCheckBox* cb){if(cb->isChecked()) return "1"; return "0";}
 
     int m_page_number = 1;
     QMap<int, PAGE> PAGES;

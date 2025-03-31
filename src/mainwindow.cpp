@@ -5,19 +5,7 @@
 #include <QDebug>
 #include <QFileDialog>
 
-#ifndef PAGE_S
-#define PAGE_S
-struct PAGE{
-    QUrl url;
-    QJsonDocument json;
-    QIcon icon[24];
-};
-#endif
-
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
-{
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) , ui(new Ui::MainWindow) {
     ui->setupUi(this);
 
     LoadConfig();
@@ -51,12 +39,12 @@ MainWindow::MainWindow(QWidget *parent)
     //Do initial request for the first page
     SendHTTPRequest();
 }
-MainWindow::~MainWindow(){
+MainWindow::~MainWindow() {
     delete ui;
     delete manager;
     delete p_thumbnail_manager;
 }
-void MainWindow::LoadConfig(){
+void MainWindow::LoadConfig() {
     //Attempt to load config otherwise use defaults
     QFile config(QDir::homePath()+"/.config/wallhaven/config.json");
     if(config.open(QIODevice::ReadOnly)){
@@ -77,7 +65,7 @@ void MainWindow::LoadConfig(){
         config.close();
     }
 }
-void MainWindow::SendHTTPRequest(){
+void MainWindow::SendHTTPRequest() {
     QString request = "https://wallhaven.cc/api/v1/search?";
 
     QString api_token = ui->APITokenInput->text();
@@ -102,8 +90,8 @@ void MainWindow::SendHTTPRequest(){
     QNetworkReply* reply = manager->get(QNetworkRequest(QUrl::fromUserInput(request)));
     m_data_storage[reply] = m_page_number;
 }
-void MainWindow::managerFinished(QNetworkReply *reply){
-    if(reply->error()){ qDebug() << reply->errorString(); return; }
+void MainWindow::managerFinished(QNetworkReply *reply) {
+    if(reply->error()) { qDebug() << reply->errorString(); return; }
     QString answer = reply->readAll();
 
     int page_number = m_data_storage[reply];
@@ -117,7 +105,7 @@ void MainWindow::managerFinished(QNetworkReply *reply){
         m_data_storage[rep] = page_number;
     }
 }
-void MainWindow::thumbnailManagerFinished(QNetworkReply *reply){
+void MainWindow::thumbnailManagerFinished(QNetworkReply *reply) {
     if(reply->error()){ qDebug() << reply->errorString(); return; }
     auto data = reply->readAll();
 
@@ -167,7 +155,7 @@ void MainWindow::SaveButtonClicked()
 
     ui->Tabs->setCurrentIndex(0);
 }
-void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count){
+void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count) {
     QString output_file = destination + url.toString().split("/").last();
     QFile image_file(output_file);
     if(image_file.exists()) return;
