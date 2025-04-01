@@ -2,28 +2,36 @@
 
 ## Release:
 Download from the Releases Tab
+
+Windows releases are not signed Windows Defender / Antivirus may interrupt install.
+
 ## Usage:
 Go into settings to set your download folder. If you are interested in searching for NSFW
-content you will require an API key that is provide when you create a profile on
+content you will require an API key that is provided when you create a profile on
 wallhaven.cc. This key can be found in your account settings.
+
+API Search Format:  
+https://wallhaven.cc/help/api
 
 ## Build:
 
-Latest Release:
+#### Windows:
 
-Arch:  
-Download PKGBUILD  
-makepkg -si  
+Recommended: MinGW Toolset  
+Required Packages: git cmake qt6-base  
+git clone https://github.com/HaydenRoss/Wall-Haven-Desktop  
+cd Wall-Haven-Desktop  
+cmake .  
+make install
 
-or  
-
-Latest Git:
+#### Linux:
 
 Required Packages: base-devel git cmake qt6-base  
 git clone https://github.com/HaydenRoss/Wall-Haven-Desktop  
 cd Wall-Haven-Desktop  
 cmake .  
-make install  
+make install
+
 ## About:
 Cross platform UI for utalizing the wallhaven.cc API.
 
