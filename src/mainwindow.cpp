@@ -4,46 +4,37 @@
 #include <QFile>
 #include <QDebug>
 #include <QFileDialog>
+#include <QLineEdit>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) , ui(new Ui::MainWindow) {
     ui->setupUi(this);
 
     LoadConfig();
 
-    //Create NetworkManagers that catch the responses from various get requests
-    manager = new QNetworkAccessManager();
-    QObject::connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(managerFinished(QNetworkReply*)));
-    p_thumbnail_manager = new QNetworkAccessManager();
-    QObject::connect(p_thumbnail_manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(thumbnailManagerFinished(QNetworkReply*)));
-
-    //Button Mappings (simple = lambda function)
     QObject::connect(ui->SaveButton, &QPushButton::clicked, this, &MainWindow::SaveButtonClicked);
-
-    // Search with configuration
-    QObject::connect(ui->SearchButton, &QPushButton::clicked, this, [=](){SendHTTPRequest();});
-    // Go back to main screen
+    QObject::connect(ui->SearchButton, &QPushButton::clicked, this, [=](){GetPage(m_page_number);});
     QObject::connect(ui->BackButton, &QPushButton::clicked, this, [=](){ui->Tabs->setCurrentIndex(0);});
-    // Go to settings screen
     QObject::connect(ui->SettingsButton, &QPushButton::clicked, this, [=](){ui->Tabs->setCurrentIndex(1);});
-    // Move forward back page
-    QObject::connect(ui->PageBackButton, &QPushButton::clicked, this, [=](){ if(m_page_number > 1) { m_page_number--; ui->PageNumberLabel->setText(QString::number(m_page_number)); SendHTTPRequest();}});
-    // Move forward one page
-    QObject::connect(ui->PageForwardButton, &QPushButton::clicked, this, [=](){ m_page_number++; ui->PageNumberLabel->setText(QString::number(m_page_number)); SendHTTPRequest(); });
-    // Set download folder
+    QObject::connect(ui->PageBackButton, &QPushButton::clicked, this, [=](){ if(m_page_number > 1) { m_page_number--; GetPage(m_page_number);}});
+    QObject::connect(ui->PageForwardButton, &QPushButton::clicked, this, [=](){ m_page_number++; GetPage(m_page_number); });
     QObject::connect(ui->DownloadFolderButton, &QPushButton::clicked, this, [=](){ui->DownloadFolderInput->setText(QUrl(QFileDialog::getExistingDirectory(this, tr(""), QDir::homePath())).toString() + "/");});
-    // Download image from corrisponding button
     QObject::connect(ui->DownloadButtons, &QButtonGroup::buttonClicked, this, [=](QAbstractButton*button){ DownloadImage(QUrl::fromUserInput(button->toolTip()), ui->DownloadFolderInput->text()); });
-    // Download all images on current page
-    QObject::connect(ui->DownloadAllButton, &QPushButton::clicked, this, [=](){ for(int i = 0; i < 24; i++) DownloadImage(QUrl::fromUserInput(PAGES[m_page_number].json["data"][i]["path"].toString()), ui->DownloadFolderInput->text()); });
+    QObject::connect(ui->DownloadAllButton, &QPushButton::clicked, this, [=](){ for(int i = 0; i < 24; i++) DownloadImage(QUrl::fromUserInput(m_pages[m_page_number].json["data"][i]["path"].toString()), ui->DownloadFolderInput->text()); });
 
-    //Do initial request for the first page
-    SendHTTPRequest();
+    QObject::connect(ui->SearchInput, &QLineEdit::returnPressed, this, [=](){ GetPage(m_page_number); });
+    QObject::connect(ui->RatioInput, &QLineEdit::returnPressed, this, [=](){ GetPage(m_page_number); });
+    QObject::connect(ui->ResolutionInput, &QLineEdit::returnPressed, this, [=](){ GetPage(m_page_number); });
+    QObject::connect(ui->PageNumberInput, &QLineEdit::returnPressed, this, [=](){ m_page_number = ui->PageNumberInput->text().toInt(); GetPage(m_page_number); });
+
+    m_default_icon = QIcon(":/resources/no-icon.png");
+
+    GetPage(m_page_number);
 }
+
 MainWindow::~MainWindow() {
     delete ui;
-    delete manager;
-    delete p_thumbnail_manager;
 }
+
 void MainWindow::LoadConfig() {
     //Attempt to load config otherwise use defaults
     QFile config(QDir::homePath()+"/.config/wallhaven/config.json");
@@ -62,68 +53,121 @@ void MainWindow::LoadConfig() {
         ui->RatioInput->setText(config_json["ratios"].toString());
         ui->APITokenInput->setText(config_json["token"].toString());
         ui->DownloadFolderInput->setText(config_json["download_folder"].toString());
+        ui->ExactCheckBox->setChecked(config_json["exact_resolution"].toInt());
+        ui->PagePrefetchAmountInput->setText(config_json["page_prefetch_amount"].toString());
         config.close();
     }
 }
-void MainWindow::SendHTTPRequest() {
+
+QString MainWindow::GetRequestFromUI(int page_number){
     QString request = "https://wallhaven.cc/api/v1/search?";
 
     QString api_token = ui->APITokenInput->text();
     if(api_token != "") request += "&apikey=" + api_token;
+    QString q = ui->SearchInput->text(); if(q != "") request += "&q=" + q;
     request += "&categories=" + isChecked(ui->ImageTypesGeneralCheckBox) + isChecked(ui->ImageTypesAnimeCheckBox) + isChecked(ui->ImageTypesPeopleCheckBox);
     request += "&purity=" + isChecked(ui->PuritySFWCheckBox) + isChecked(ui->PuritySketchyCheckBox) + isChecked(ui->PurityNSFWCheckBox);
     request += "&sorting=" + ui->SortingComboBox->currentText();
     request += "&order=" + ui->OrderComboBox->currentText();
     request += "&ai_art_filter=" + isChecked(ui->AIArtCheckBox);
-    QString resolution = ui->ResolutionInput->text(); if(resolution != "") request += "&atleast=" + resolution;
-    QString ratio = ui->RatioInput->text(); if(ratio != "") request += "&ratios=" + ratio;
-    request += "&page=" + QString::number(m_page_number);
 
-    if(PAGES[m_page_number].url == request){
-        for(int i = 0; i < 24; i++){
-            ui->DownloadButtons->buttons().at(i)->setIcon(PAGES[m_page_number].icon[i]);
-            ui->DownloadButtons->buttons().at(i)->setToolTip(PAGES[m_page_number].json["data"][i]["path"].toString());
+    QString resolution = ui->ResolutionInput->text();
+    if(resolution != ""){
+        if(ui->ExactCheckBox->isChecked()){
+            request += "&resolution=" + resolution;
+        }else{
+            request += "&atleast=" + resolution;
         }
-        return;
     }
 
-    QNetworkReply* reply = manager->get(QNetworkRequest(QUrl::fromUserInput(request)));
-    m_data_storage[reply] = m_page_number;
+    QString ratio = ui->RatioInput->text(); if(ratio != "") request += "&ratios=" + ratio;
+    request += "&page=" + QString::number(page_number);
+
+    return request;
 }
-void MainWindow::managerFinished(QNetworkReply *reply) {
-    if(reply->error()) { qDebug() << reply->errorString(); return; }
-    QString answer = reply->readAll();
 
-    int page_number = m_data_storage[reply];
-    m_data_storage.remove(reply);
+void MainWindow::GetPage(int page_number, int retry_count) {
+    if(retry_count >= m_max_retry_count) return;
 
-    PAGES[page_number].url = reply->url();
-    PAGES[page_number].json = QJsonDocument::fromJson(answer.toUtf8());
+    ui->PageNumberInput->setText(QString::number(m_page_number));
 
-    for(int i = 0; i < 24; i++){
-        QNetworkReply* rep = p_thumbnail_manager->get(QNetworkRequest(QUrl::fromUserInput(PAGES[page_number].json["data"][i]["thumbs"]["small"].toString())));
-        m_data_storage[rep] = page_number;
-    }
-}
-void MainWindow::thumbnailManagerFinished(QNetworkReply *reply) {
-    if(reply->error()){ qDebug() << reply->errorString(); return; }
-    auto data = reply->readAll();
+    QString request = GetRequestFromUI(page_number);
 
-    int page_number = m_data_storage[reply];
-
-    for(int i = 0; i < 24; i++){
-        if(QUrl::fromUserInput(PAGES[page_number].json["data"][i]["thumbs"]["small"].toString()) == reply->url()){
-            QPixmap p;
-            p.loadFromData(data);
-            PAGES[page_number].icon[i] = QIcon(p);
-
-            if(page_number == m_page_number){
-                ui->DownloadButtons->buttons().at(i)->setIcon(PAGES[m_page_number].icon[i]);
-                ui->DownloadButtons->buttons().at(i)->setToolTip(PAGES[m_page_number].json["data"][i]["path"].toString());
+    if(m_pages[page_number].url == request && retry_count == 0){
+        if(page_number == m_page_number){
+            for(int i = 0; i < 24; i++){
+                ui->DownloadButtons->buttons().at(i)->setIcon(m_pages[page_number].icon[i]);
+                ui->DownloadButtons->buttons().at(i)->setToolTip(m_pages[page_number].json["data"][i]["path"].toString());
             }
         }
+    }else{
+        qDebug() << "Fetched" << request;
+        m_pages[page_number].url = QUrl::fromUserInput(request);
+
+        m_threadpool.start([=](){
+            QNetworkAccessManager manager;
+            QNetworkReply* reply = manager.get(QNetworkRequest(QNetworkRequest(QUrl::fromUserInput(request))));
+
+            QEventLoop loop;
+            QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+            loop.exec();
+
+            if(reply->error() && retry_count < 5){
+                QThread::sleep(5);
+                qDebug() << reply->error() << retry_count << reply->url();
+                GetPage(page_number, retry_count + 1);
+                return;
+            }
+
+            QString answer = reply->readAll();
+
+            m_pages[page_number].url = reply->url();
+            m_pages[page_number].json = QJsonDocument::fromJson(answer.toUtf8());
+            m_last_page_number = m_pages[page_number].json["meta"]["last_page"].toInt();
+
+            ui->LastPageNumberLabel->setText(QString::number(m_last_page_number));
+
+            if(m_page_number > m_last_page_number){
+                return;
+            }
+
+            for(int i = 0; i < 24; i++){
+                m_pages[page_number].icon[i] = DownloadThumbnail(QUrl::fromUserInput(m_pages[page_number].json["data"][i]["thumbs"]["small"].toString()), &manager, page_number);
+                if(page_number == m_page_number){
+                    ui->DownloadButtons->buttons().at(i)->setIcon(m_pages[page_number].icon[i]);
+                    ui->DownloadButtons->buttons().at(i)->setToolTip(m_pages[page_number].json["data"][i]["path"].toString());
+                }
+            }
+        });
+    }
+
+    if(m_page_number + ui->PagePrefetchAmountInput->text().toInt() > page_number){
+        GetPage(page_number + 1);
     }
 }
+
+QIcon MainWindow::DownloadThumbnail(QUrl url, QNetworkAccessManager* manager, int page_number, int retry_count){
+    if(retry_count > 5) return m_default_icon;
+
+    QNetworkReply* reply = manager->get(QNetworkRequest(url));
+
+    QEventLoop loop;
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if(reply->error()){
+        QThread::sleep(2);
+        qDebug() << reply->error() << retry_count << reply->url();
+        return DownloadThumbnail(url, manager, retry_count + 1);
+    }
+
+    auto data = reply->readAll();
+
+    QPixmap p;
+    p.loadFromData(data);
+    return QIcon(p);
+}
+
 void MainWindow::SaveButtonClicked()
 {
     QDir config_dir;
@@ -143,7 +187,9 @@ void MainWindow::SaveButtonClicked()
                      +ui->APITokenInput->text()+"\", \"download_folder\": \""
                      +ui->DownloadFolderInput->text()+"\", \"sorting\": \""
                      +ui->SortingComboBox->currentText()+"\", \"order\": \""
-                     +ui->OrderComboBox->currentText()+"\"}";
+                     +ui->OrderComboBox->currentText()+"\", \"exact_resolution\": \""
+                     +isChecked(ui->ExactCheckBox)+"\", \"page_prefetch_amount\": \""
+                     +ui->PagePrefetchAmountInput->text()+"\"}";
 
     QJsonDocument config_json = QJsonDocument::fromJson(output.toUtf8());
 
@@ -155,6 +201,7 @@ void MainWindow::SaveButtonClicked()
 
     ui->Tabs->setCurrentIndex(0);
 }
+
 void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count) {
     QString output_file = destination + url.toString().split("/").last();
     QFile image_file(output_file);
@@ -170,9 +217,9 @@ void MainWindow::DownloadImage(QUrl url, QString destination, int retry_count) {
 
             if(reply->error() && retry_count < 5){
                 QThread::sleep(5);
-                qDebug() << "Error" << retry_count << reply->error();
-                int r = retry_count + 1;
-                DownloadImage(url, destination, r);
+                qDebug() << reply->error() << retry_count << reply->url();
+                DownloadImage(url, destination, retry_count + 1);
+                return;
             }
 
             auto data = reply->readAll();

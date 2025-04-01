@@ -31,23 +31,25 @@ public:
     ~MainWindow();
 
 private slots:
-    void managerFinished(QNetworkReply *reply);
-    void thumbnailManagerFinished(QNetworkReply *reply);
     void SaveButtonClicked();
 
 private:
     Ui::MainWindow *ui;
-    QNetworkAccessManager* manager;
-    QNetworkAccessManager* p_thumbnail_manager;
     QThreadPool m_threadpool;
 
     void LoadConfig();
-    void SendHTTPRequest();
+    void GetPage(int, int retry_count = 0);
+    QString GetRequestFromUI(int);
+    QIcon DownloadThumbnail(QUrl url, QNetworkAccessManager* manager, int page_number, int retry_count = 0);
     void DownloadImage(QUrl url, QString destination, int retry_count = 0);
     inline QString isChecked(QCheckBox* cb){if(cb->isChecked()) return "1"; return "0";}
 
     int m_page_number = 1;
-    QMap<int, PAGE> PAGES;
-    QHash<QNetworkReply*, int> m_data_storage;
+    int m_last_page_number = 1;
+    int m_max_retry_count = 5;
+
+    QIcon m_default_icon;
+    QMap<int, PAGE> m_pages;
+
 };
 #endif // MAINWINDOW_H
