@@ -8,26 +8,25 @@ content you will require an API key that is provide when you create a profile on
 wallhaven.cc. This key can be found in your account settings.
 
 ## Build:
-Required Packages: git cmake qt6-tools
 
-git clone https://github.com/HaydenRoss/WallHaven-Desktop
+Latest Release:
 
-cd WallHaven-Desktop
-
-mkdir build
-
-cd build  
-cmake ../
-
-make install  
+Arch:  
+Download PKGBUILD  
+makepkg -si  
 
 or  
 
-git clone https://github.com/HaydenRoss/WallHaven-Desktop && cd WallHaven-Desktop && cmake . && make install
+Latest Git:
+
+Required Packages: base-devel git cmake qt6-base  
+git clone https://github.com/HaydenRoss/Wall-Haven-Desktop  
+cd Wall-Haven-Desktop  
+cmake .  
+make install  
 ## About:
 Cross platform UI for utalizing the wallhaven.cc API.
 
 Created by Hayden Ross
 
 Using QT6 Framework
-## Licence
