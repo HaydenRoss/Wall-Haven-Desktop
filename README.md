@@ -1,4 +1,4 @@
-# WallHaven-Desktop
+# Wall-Haven-Desktop
 
 ## Release:
 Download from the Releases Tab
